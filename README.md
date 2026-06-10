@@ -1,36 +1,70 @@
 # Claude Code Statusline Cockpit
 
-A two-line statusline for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that turns your terminal into a cockpit with real-time context.
+Two-line custom statusline for [Claude Code](https://docs.anthropic.com/en/docs/claude-code) that gives you real-time visibility into your session, project, and rate limits — right in the terminal.
 
-## What it shows
+```
+Claude Opus 4.6 | 5h: 12% (4h32m) | 7d: 3% (6d11h) | ctx: 8% | ⎇ main
+✓ clean  │  WP 6.7 · PHP 8.2 · wp-cli ✓  │  mcp: 3  │  ~/myproject
+```
 
-**Line 1** — Model & session info:
-- Model name (e.g. Claude Opus 4.6)
-- Rate limit usage (5h and 7d windows) with color coding
-- Context window usage (%)
-- Current git branch
+## How it works
 
-**Line 2** — Project context:
-- Git status (dirty/clean + number of changes)
-- Auto-detected stack: WordPress (with version + PHP version), Laravel, Drupal, Joomla, Next.js, Node, Python
-- Number of MCP servers connected
-- Current working directory
+The statusline is split into two scripts that run together:
 
-## Screenshot
+### `statusline-cockpit.sh` (main entry point)
 
-![statusline](screenshot.png)
+Reads the JSON blob that Claude Code pipes into the statusline command and renders two lines:
+
+**Line 1** — delegates to `statusline-legacy.sh`:
+- Active model name (e.g. `Claude Opus 4.6`)
+- Rate limit usage for both windows (`5h` and `7d`) with time until reset
+- Context window usage (`ctx`)
+- Current git branch (`⎇ main`)
+
+**Line 2** — assembled by cockpit itself:
+- **Git status**: `✓ clean` or `✱N changes` (yellow) — number of dirty files via `git status --porcelain`
+- **Stack detection**: auto-detects the project framework by checking for marker files:
+  - `wp-config.php` / `wp-content/` → WordPress (+ version from `wp-includes/version.php`, PHP version, wp-cli availability)
+  - `artisan` → Laravel
+  - `core/lib/Drupal.php` → Drupal
+  - `configuration.php` + `administrator/` → Joomla
+  - `next.config.{js,mjs,ts}` → Next.js
+  - `package.json` → Node (+ version)
+  - `pyproject.toml` / `requirements.txt` → Python
+- **MCP servers**: counts servers from project `.mcp.json` and global `~/.claude.json`
+- **Working directory**: abbreviated with `~`
+
+All segments are separated by `│` and color-coded with ANSI escape codes.
+
+### `statusline-legacy.sh`
+
+A Python script wrapped in bash that parses the Claude Code JSON input and renders line 1. Handles:
+- Model display name from `model.display_name` or `model.id`
+- Two rate-limit windows (`five_hour`, `seven_day`) — shows percentage used and countdown to reset, parsed from ISO 8601 timestamps or Unix epoch
+- Context window percentage from `context_window.used_percentage`
+- Git branch via `git symbolic-ref` (falls back to short SHA for detached HEAD)
+
+### Color coding
+
+| Usage    | Color    |
+|----------|----------|
+| 0–50%    | Green    |
+| 51–80%   | Yellow   |
+| > 80%    | Red      |
+
+Applied to rate limits and context window.
 
 ## Installation
 
-1. Copy the scripts to your Claude config directory:
-
 ```bash
+# 1. Copy scripts
 cp statusline-cockpit.sh ~/.claude/
 cp statusline-legacy.sh ~/.claude/
 chmod +x ~/.claude/statusline-cockpit.sh ~/.claude/statusline-legacy.sh
-```
 
-2. Add the statusline config to your `~/.claude/settings.json`:
+# 2. Add to ~/.claude/settings.json
+# (merge with your existing settings if needed)
+```
 
 ```json
 {
@@ -41,21 +75,27 @@ chmod +x ~/.claude/statusline-cockpit.sh ~/.claude/statusline-legacy.sh
 }
 ```
 
-3. Restart Claude Code. Done!
+Restart Claude Code.
 
-## Requirements
+## Dependencies
 
-- `jq` — for parsing the JSON input from Claude Code
-- `git` — for branch and status info
-- `python3` — for the legacy statusline (rate limits, context %)
+| Tool      | Used for                              | Required |
+|-----------|---------------------------------------|----------|
+| `jq`      | Parsing Claude Code JSON input        | Yes      |
+| `git`     | Branch name, dirty file count         | Yes      |
+| `python3` | Rate limits, context %, time parsing  | Yes      |
+| `php`     | PHP version in WordPress detection    | No       |
+| `wp`      | wp-cli availability indicator         | No       |
+| `node`    | Node.js version in stack detection    | No       |
 
-## Color coding
+## File structure
 
-| Usage   | Color  |
-|---------|--------|
-| < 50%   | Green  |
-| 50–80%  | Yellow |
-| > 80%   | Red    |
+```
+~/.claude/
+├── settings.json            # points statusLine to cockpit
+├── statusline-cockpit.sh    # main script — renders both lines
+└── statusline-legacy.sh     # line 1 — model, limits, context, branch
+```
 
 ## License
 

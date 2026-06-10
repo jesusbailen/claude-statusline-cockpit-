@@ -4,67 +4,56 @@ Statusline personalizado de dos lineas para [Claude Code](https://docs.anthropic
 
 ```
 Claude Opus 4.6 | 5h: 12% (4h32m) | 7d: 3% (6d11h) | ctx: 8% | ⎇ main
-✓ limpio  │  WP 6.7 · PHP 8.2 · wp-cli ✓  │  mcp: 3  │  ~/myproject
+✓ clean  │  WP 6.7 · PHP 8.2 · wp-cli ✓  │  mcp: 3  │  ~/myproject
 ```
 
-## Como funciona
+## Que muestra
 
-El statusline se divide en dos scripts que trabajan juntos:
-
-### `statusline-cockpit.sh` (punto de entrada)
-
-Lee el JSON que Claude Code inyecta en el comando de statusline y renderiza dos lineas:
-
-**Linea 1** — delega en `statusline-legacy.sh`:
-- Nombre del modelo activo (ej. `Claude Opus 4.6`)
-- Uso de rate limits en ambas ventanas (`5h` y `7d`) con cuenta atras hasta el reset
+**Linea 1** — informacion de sesion:
+- Modelo activo (ej. `Claude Opus 4.6`)
+- Rate limits en ambas ventanas (`5h` y `7d`) con cuenta atras hasta el reset
 - Uso de la ventana de contexto (`ctx`)
-- Rama git actual (`⎇ main`)
+- Rama git actual
 
-**Linea 2** — ensamblada por el cockpit:
-- **Estado git**: `✓ clean` o `✱N changes` (amarillo) — numero de archivos sucios via `git status --porcelain`
-- **Deteccion de stack**: detecta automaticamente el framework del proyecto buscando archivos marcadores:
-  - `wp-config.php` / `wp-content/` → WordPress (+ version desde `wp-includes/version.php`, version de PHP, disponibilidad de wp-cli)
-  - `artisan` → Laravel
-  - `core/lib/Drupal.php` → Drupal
-  - `configuration.php` + `administrator/` → Joomla
-  - `next.config.{js,mjs,ts}` → Next.js
-  - `package.json` → Node (+ version)
-  - `pyproject.toml` / `requirements.txt` → Python
-- **Servidores MCP**: cuenta servidores del `.mcp.json` del proyecto y del `~/.claude.json` global
-- **Directorio de trabajo**: abreviado con `~`
+**Linea 2** — contexto del proyecto:
+- Estado git: `✓ clean` o `✱N changes` con el numero de archivos modificados
+- Stack detectado automaticamente: WordPress (con version, PHP y wp-cli), Laravel, Drupal, Joomla, Next.js, Node o Python
+- Numero de servidores MCP conectados (del proyecto y globales)
+- Directorio de trabajo
 
-Todos los segmentos se separan con `│` y se colorean con codigos ANSI.
+Todo con colores: verde (< 50%), amarillo (51-80%), rojo (> 80%).
 
-### `statusline-legacy.sh`
+## Instalacion paso a paso
 
-Script Python envuelto en bash que parsea el JSON de entrada de Claude Code y renderiza la linea 1. Gestiona:
-- Nombre del modelo desde `model.display_name` o `model.id`
-- Dos ventanas de rate limit (`five_hour`, `seven_day`) — muestra porcentaje usado y cuenta atras hasta el reset, parseando timestamps ISO 8601 o Unix epoch
-- Porcentaje de ventana de contexto desde `context_window.used_percentage`
-- Rama git via `git symbolic-ref` (fallback a SHA corto en detached HEAD)
-
-### Codigo de colores
-
-| Uso      | Color    |
-|----------|----------|
-| 0–50%    | Verde    |
-| 51–80%   | Amarillo |
-| > 80%    | Rojo     |
-
-Se aplica a rate limits y ventana de contexto.
-
-## Instalacion
+### 1. Clonar el repositorio
 
 ```bash
-# 1. Copiar scripts
+git clone git@github.com:jesusbailen/claude-statusline-cockpit-.git
+cd claude-statusline-cockpit-
+```
+
+### 2. Copiar los scripts a tu directorio de Claude Code
+
+```bash
 cp statusline-cockpit.sh ~/.claude/
 cp statusline-legacy.sh ~/.claude/
-chmod +x ~/.claude/statusline-cockpit.sh ~/.claude/statusline-legacy.sh
-
-# 2. Añadir a ~/.claude/settings.json
-# (fusionar con tu settings existente si ya tienes uno)
 ```
+
+### 3. Darles permisos de ejecucion
+
+```bash
+chmod +x ~/.claude/statusline-cockpit.sh ~/.claude/statusline-legacy.sh
+```
+
+### 4. Configurar Claude Code para usar el statusline
+
+Abre tu archivo de configuracion:
+
+```bash
+nano ~/.claude/settings.json
+```
+
+Añade (o fusiona con tu configuracion existente) el bloque `statusLine`:
 
 ```json
 {
@@ -75,20 +64,22 @@ chmod +x ~/.claude/statusline-cockpit.sh ~/.claude/statusline-legacy.sh
 }
 ```
 
-Reinicia Claude Code.
+### 5. Reiniciar Claude Code
 
-## Dependencias
+Cierra y vuelve a abrir Claude Code. El statusline aparecera automaticamente en la parte inferior del terminal.
 
-| Herramienta | Se usa para                                | Requerida |
-|-------------|--------------------------------------------|-----------|
-| `jq`        | Parsear el JSON de entrada de Claude Code  | Si        |
-| `git`       | Nombre de rama, conteo de archivos sucios  | Si        |
-| `python3`   | Rate limits, contexto %, parseo de tiempos | Si        |
-| `php`       | Version de PHP en deteccion de WordPress   | No        |
-| `wp`        | Indicador de disponibilidad de wp-cli      | No        |
-| `node`      | Version de Node.js en deteccion de stack   | No        |
+## Requisitos
 
-## Estructura de archivos
+| Herramienta | Para que se usa                            | Obligatoria |
+|-------------|--------------------------------------------|-------------|
+| `jq`        | Parsear el JSON de entrada de Claude Code  | Si          |
+| `git`       | Rama actual y conteo de archivos           | Si          |
+| `python3`   | Rate limits, contexto y parseo de tiempos  | Si          |
+| `php`       | Version de PHP en proyectos WordPress      | No          |
+| `wp`        | Indicador de wp-cli disponible             | No          |
+| `node`      | Version de Node.js en deteccion de stack   | No          |
+
+## Estructura
 
 ```
 ~/.claude/
